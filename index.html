@@ -11,10 +11,477 @@
     <meta property="og:image" content="/img/the-eldritch-banner.jpg">
     <link rel="icon" type="image/jpg" href="/img/the-eldritch.jpg">
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7/dist/blazeface.min.js"></script>
+    <style>
+        :root {
+            --void: #000010;
+            --abyss: #0a0a1a;
+            --eldritch-blue: #00f0ff;
+            --forbidden-purple: #bd00ff;
+            --blood: #ff0038;
+            --flesh: #ffaa88;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: var(--void);
+            color: var(--flesh);
+            font-family: 'Courier New', monospace;
+            cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="none" stroke="%2300f0ff" stroke-width="1"/><circle cx="8" cy="8" r="1" fill="%2300f0ff"/></svg>'), auto;
+        }
+
+        #main-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        #three-js-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        #eldrich-header {
+            padding: 2rem;
+            border-bottom: 1px solid var(--eldritch-blue);
+            text-shadow: 0 0 10px var(--eldritch-blue);
+            background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
+        }
+
+        #eldrich-title {
+            font-size: 3rem;
+            margin: 0;
+            color: var(--eldritch-blue);
+            letter-spacing: 0.5rem;
+            animation: pulse 7s infinite alternate;
+        }
+
+        #eldrich-subtitle {
+            font-style: italic;
+            opacity: 0.8;
+            margin-top: 0.5rem;
+        }
+
+        #terminal-container {
+            background-color: rgba(0, 0, 0, 0.7);
+            border-top: 1px solid var(--eldritch-blue);
+            padding: 1rem;
+            height: 30vh;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+        }
+
+        #terminal-output {
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        #terminal-input-container {
+            display: flex;
+            margin-top: 0.5rem;
+        }
+
+        #terminal-prompt {
+            color: var(--blood);
+            margin-right: 0.5rem;
+        }
+
+        #terminal-input {
+            background: transparent;
+            border: none;
+            color: var(--eldritch-blue);
+            font-family: 'Courier New', monospace;
+            width: 100%;
+            outline: none;
+            caret-color: var(--eldritch-blue);
+        }
+
+        #eye-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+            display: none;
+        }
+
+        #eldrich-eye {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--blood) 0%, var(--void) 70%);
+            border: 2px solid var(--forbidden-purple);
+            box-shadow: 0 0 30px var(--forbidden-purple);
+            animation: blink 5s infinite;
+        }
+
+        #puzzle-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.9);
+            padding: 2rem;
+            border: 1px solid var(--eldritch-blue);
+            box-shadow: 0 0 20px var(--eldritch-blue);
+            display: none;
+            z-index: 100;
+            max-width: 600px;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; }
+            100% { opacity: 0.7; }
+        }
+
+        @keyframes blink {
+            0%, 48%, 52%, 100% { transform: scaleY(1); }
+            50% { transform: scaleY(0.1); }
+        }
+
+        .glitch {
+            position: relative;
+        }
+
+        .glitch::before, .glitch::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.8;
+        }
+
+        .glitch::before {
+            color: var(--forbidden-purple);
+            z-index: -1;
+            animation: glitch-effect 3s infinite;
+        }
+
+        .glitch::after {
+            color: var(--eldritch-blue);
+            z-index: -2;
+            animation: glitch-effect 2s infinite reverse;
+        }
+
+        @keyframes glitch-effect {
+            0% { transform: translate(0); }
+            20% { transform: translate(-3px, 3px); }
+            40% { transform: translate(-3px, -3px); }
+            60% { transform: translate(3px, 3px); }
+            80% { transform: translate(3px, -3px); }
+            100% { transform: translate(0); }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #sanctum-button {
+            position: absolute;
+            bottom: 2rem;
+            right: 2rem;
+            background: transparent;
+            border: 1px solid var(--eldritch-blue);
+            color: var(--eldritch-blue);
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+
+        #sanctum-button:hover {
+            background-color: rgba(0, 240, 255, 0.1);
+            box-shadow: 0 0 10px var(--eldritch-blue);
+        }
+
+        #blood-pact-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.9);
+            padding: 2rem;
+            border: 1px solid var(--blood);
+            box-shadow: 0 0 20px var(--blood);
+            display: none;
+            z-index: 100;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
-    <div class="dropdown">
-        <button class="dropbtn" onclick="location.href = 'https://the-eldritch.undo.it/AlgerApps.html';">Dropdown Menu</button>
+    <div id="three-js-container"></div>
+    
+    <div id="main-container">
+        <header id="eldrich-header">
+            <h1 id="eldrich-title">THE ELDRICH PORTAL</h1>
+            <p id="eldrich-subtitle">"Knowledge is power, and strength is forged through discipline"</p>
+        </header>
+        
+        <div id="terminal-container">
+            <div id="terminal-output">
+                > Initializing EldrichOS v9.6.6...<br>
+                > Scanning visitor credentials...<br>
+                > WARNING: This terminal responds to the worthy<br>
+                > Type 'help' for command list<br>
+            </div>
+            <div id="terminal-input-container">
+                <span id="terminal-prompt">></span>
+                <input type="text" id="terminal-input" autocomplete="off" spellcheck="false">
+            </div>
+        </div>
     </div>
+    
+    <div id="eye-container">
+        <div id="eldrich-eye"></div>
+    </div>
+    
+    <div id="puzzle-container">
+        <h2 style="color: var(--eldritch-blue);">THE LABYRINTH CIPHER</h2>
+        <p>To proceed, you must solve the following:</p>
+        <p id="puzzle-text" style="font-family: monospace; background: #111; padding: 1rem;"></p>
+        <input type="text" id="puzzle-input" style="width: 100%; padding: 0.5rem; margin-top: 1rem;">
+        <button id="puzzle-submit" style="margin-top: 1rem; background: var(--abyss); color: var(--eldritch-blue); border: 1px solid var(--eldritch-blue); padding: 0.5rem 1rem;">Submit</button>
+    </div>
+    
+    <div id="blood-pact-container">
+        <h2 style="color: var(--blood);">THE BLOOD PACT</h2>
+        <p>Knowledge demands sacrifice. To proceed, you must prove your commitment.</p>
+        <p>Enter the secret phrase whispered in the void:</p>
+        <input type="text" id="blood-pact-input" style="width: 100%; padding: 0.5rem; margin-top: 1rem;">
+        <button id="blood-pact-submit" style="margin-top: 1rem; background: var(--abyss); color: var(--blood); border: 1px solid var(--blood); padding: 0.5rem 1rem;">Submit</button>
+    </div>
+    
+    <button id="sanctum-button" class="hidden">ENTER THE INNER SANCTUM</button>
+
+    <script>
+        // Three.js Eldrich Background
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('three-js-container').appendChild(renderer.domElement);
+
+        // Create eldrich geometry
+        const geometry = new THREE.TorusKnotGeometry(10, 3, 100, 16);
+        const material = new THREE.MeshBasicMaterial({ 
+            color: 0x00f0ff,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.3
+        });
+        const torusKnot = new THREE.Mesh(geometry, material);
+        scene.add(torusKnot);
+
+        camera.position.z = 30;
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            torusKnot.rotation.x += 0.005;
+            torusKnot.rotation.y += 0.01;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Terminal functionality
+        const terminalInput = document.getElementById('terminal-input');
+        const terminalOutput = document.getElementById('terminal-output');
+        const eyeContainer = document.getElementById('eye-container');
+        const puzzleContainer = document.getElementById('puzzle-container');
+        const puzzleText = document.getElementById('puzzle-text');
+        const puzzleInput = document.getElementById('puzzle-input');
+        const puzzleSubmit = document.getElementById('puzzle-submit');
+        const bloodPactContainer = document.getElementById('blood-pact-container');
+        const bloodPactInput = document.getElementById('blood-pact-input');
+        const bloodPactSubmit = document.getElementById('blood-pact-submit');
+        const sanctumButton = document.getElementById('sanctum-button');
+
+        // Terminal commands
+        const commands = {
+            help: () => {
+                return `Available commands:<br>
+                - help: Show this message<br>
+                - summon: Invoke the eye of the Eldrich<br>
+                - puzzle: Begin the cipher challenge<br>
+                - pact: Initiate the blood pact ritual<br>
+                - clear: Clear the terminal<br>`;
+            },
+            summon: () => {
+                eyeContainer.style.display = 'block';
+                setTimeout(() => {
+                    eyeContainer.style.display = 'none';
+                }, 3000);
+                return 'The Eye gazes upon you... Do you feel worthy?';
+            },
+            puzzle: () => {
+                const ciphers = [
+                    { question: "Decrypt this Caesar cipher (shift 13): URYYB JBEYQ", answer: "HELLO WORLD" },
+                    { question: "What is the 7th digit of π after the decimal?", answer: "6" },
+                    { question: "Binary: 01001000 01000101 01001100 01001100 01001111", answer: "HELLO" }
+                ];
+                const randomCipher = ciphers[Math.floor(Math.random() * ciphers.length)];
+                currentPuzzle = randomCipher;
+                puzzleText.textContent = randomCipher.question;
+                puzzleContainer.style.display = 'block';
+                return 'Beginning cipher challenge...';
+            },
+            pact: () => {
+                bloodPactContainer.style.display = 'block';
+                return 'The Blood Pact ritual begins... Knowledge demands sacrifice.';
+            },
+            clear: () => {
+                terminalOutput.innerHTML = '';
+                return '';
+            }
+        };
+
+        let currentPuzzle = null;
+        let hasSolvedPuzzle = false;
+        let hasCompletedPact = false;
+
+        // Terminal input handler
+        terminalInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const command = terminalInput.value.trim().toLowerCase();
+                terminalInput.value = '';
+                
+                terminalOutput.innerHTML += `> ${command}<br>`;
+                
+                if (commands[command]) {
+                    const response = commands[command]();
+                    if (response) {
+                        terminalOutput.innerHTML += `${response}<br>`;
+                    }
+                } else if (command) {
+                    terminalOutput.innerHTML += `Command not recognized: ${command}<br>`;
+                }
+                
+                terminalOutput.scrollTop = terminalOutput.scrollHeight;
+            }
+        });
+
+        // Puzzle submit handler
+        puzzleSubmit.addEventListener('click', function() {
+            const answer = puzzleInput.value.trim().toUpperCase();
+            if (answer === currentPuzzle.answer) {
+                terminalOutput.innerHTML += `> Puzzle solved! The path opens before you...<br>`;
+                hasSolvedPuzzle = true;
+                checkSanctumAccess();
+            } else {
+                terminalOutput.innerHTML += `> Incorrect. The void mocks your feeble attempts.<br>`;
+            }
+            puzzleInput.value = '';
+            puzzleContainer.style.display = 'none';
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        });
+
+        // Blood pact submit handler
+        bloodPactSubmit.addEventListener('click', function() {
+            const answer = bloodPactInput.value.trim().toLowerCase();
+            if (answer === "cthulhu fhtagn") {
+                terminalOutput.innerHTML += `> The pact is sealed. Your commitment is acknowledged.<br>`;
+                hasCompletedPact = true;
+                checkSanctumAccess();
+            } else {
+                terminalOutput.innerHTML += `> The void rejects your false offering.<br>`;
+            }
+            bloodPactInput.value = '';
+            bloodPactContainer.style.display = 'none';
+            terminalOutput.scrollTop = terminalOutput.scrollHeight;
+        });
+
+        // Check if sanctum should be unlocked
+        function checkSanctumAccess() {
+            if (hasSolvedPuzzle && hasCompletedPact) {
+                sanctumButton.classList.remove('hidden');
+                terminalOutput.innerHTML += `> The Inner Sanctum awaits...<br>`;
+                terminalOutput.scrollTop = terminalOutput.scrollHeight;
+            }
+        }
+
+        // Sanctum button handler
+        sanctumButton.addEventListener('click', function() {
+            // In a full implementation, this would unlock the complete portfolio
+            alert("You have proven yourself worthy. The full knowledge of The Eldrich would now be revealed...");
+        });
+
+        // Face detection for cognitive lock
+        async function initFaceDetection() {
+            const model = await blazeface.load();
+            const video = document.createElement('video');
+            document.body.appendChild(video);
+            
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    video.srcObject = stream;
+                    video.play();
+                    
+                    setInterval(async () => {
+                        const predictions = await model.estimateFaces(video);
+                        if (predictions.length > 0) {
+                            // Simple "worthiness" check - are you looking at the screen?
+                            const face = predictions[0];
+                            const isLooking = face.topLeft[0] > 0.3 && face.topLeft[0] < 0.7;
+                            
+                            if (!isLooking) {
+                                terminalOutput.innerHTML += `> The Eye notices your wavering attention...<br>`;
+                                terminalOutput.scrollTop = terminalOutput.scrollHeight;
+                            }
+                        }
+                    }, 3000);
+                })
+                .catch(err => {
+                    terminalOutput.innerHTML += `> Camera access denied. The Eldrich doubts your transparency.<br>`;
+                    terminalOutput.scrollTop = terminalOutput.scrollHeight;
+                });
+        }
+
+        // Initialize face detection (commented out for demo purposes)
+        // initFaceDetection();
+
+        // Window resize handler
+        window.addEventListener('resize', function() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Konami code easter egg
+        const konamiCode = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+        let konamiIndex = 0;
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === konamiCode[konamiIndex]) {
+                konamiIndex++;
+                if (konamiIndex === konamiCode.length) {
+                    terminalOutput.innerHTML += `> Eldrich mode activated. The void welcomes you.<br>`;
+                    document.body.style.background = 'radial-gradient(circle, #110011 0%, #000000 100%)';
+                    torusKnot.material.color.setHex(0xbd00ff);
+                    konamiIndex = 0;
+                    terminalOutput.scrollTop = terminalOutput.scrollHeight;
+                }
+            } else {
+                konamiIndex = 0;
+            }
+        });
+
+        // Initial terminal focus
+        terminalInput.focus();
+    </script>
 </body>
 </html>
